@@ -1,4 +1,4 @@
-# c-equal4
+# c-equal
 
 ## Description
 The C Equal is a programming language , created for the developpement of the communix kernel.
