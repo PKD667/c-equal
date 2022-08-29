@@ -1,0 +1,63 @@
+#!/usr/bin/env python3
+
+import sys,os,binascii
+
+table = {
+    "print" : " b0 {val} cd 10"
+}
+
+
+def readfile(path):
+    with open(path,"r") as f:
+        str = f.read()
+        str =  str.replace("\r","")
+        arr = str.replace("\n","")
+        lines =  str.split(";")
+        lines = [x for x in lines if x != ""]
+        f.close()
+    return lines
+
+def words(line):
+    bytes = []
+    words = line.split(" ")
+    if len(words) < 2:
+        print("Error: " + line)
+        sys.exit(1)
+    for i in range(len(words)):
+        if words[i] in table:
+            value  = words[i+1]
+            ins = table[words[i]].format(val=value.encode("utf8").hex())
+            return ins
+            
+        else:
+            print("Unknown command: " + words[i])
+
+def parse(arr):
+    bytes = "B4 0E"
+    for line in arr:
+        print("line = " + line)
+        bytes += words(line)
+        bytes += " "
+    bn = len(bytes.split(" "))
+    br = 511 - bn
+    for i in range(br):
+        bytes += "00 "
+    bytes += "55 AA"
+    return bytes
+
+
+    
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: ce <file>")
+        sys.exit(1)
+    else:
+        path = sys.argv[1]
+        if not os.path.exists(path):
+            print("File not found: " + path)
+            sys.exit(1)
+    lines = readfile(path)
+    data = parse(lines)
+    outfile = path.replace(".ce",".bin")
+    os.system(f"echo {data} | xxd -r -p -  {outfile}")
