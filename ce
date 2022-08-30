@@ -1,52 +1,64 @@
 #!/usr/bin/env python3
 
-import sys,os,binascii
+import sys,os
 
-table = {
-    "print" : " b0 {val} cd 10"
+FILE = """
+\xB4\xE0 
+    
+    
+"""
+
+
+
+OFFSET = "\x7c\x40"
+
+
+vars = {
+    "default" : "\x68\x65\x6C\x6C\x6F"
+}
+vardata = ""
+defs = {
+    "print" : "\xB0{0}\xCD\x10"
 }
 
+def hexify(string):
+    return " ".join([hex(ord(c))[2:] for c in string])
 
-def readfile(path):
-    with open(path,"r") as f:
-        str = f.read()
-        str =  str.replace("\r","")
-        arr = str.replace("\n","")
-        lines =  str.split(";")
-        lines = [x for x in lines if x != ""]
-        f.close()
+def lineify(scope):
+    scope = scope.replace("\n","")
+    scope = scope.replace("\r","")
+    lines = scope.split(";")
+    lines.remove("")
     return lines
 
-def words(line):
-    bytes = []
-    words = line.split(" ")
-    if len(words) < 2:
-        print("Error: " + line)
-        sys.exit(1)
-    for i in range(len(words)):
-        if words[i] in table:
-            value  = words[i+1]
-            ins = table[words[i]].format(val=value.encode("utf8").hex())
-            return ins
-            
-        else:
-            print("Unknown command: " + words[i])
 
-def parse(arr):
-    bytes = "B4 0E"
-    for line in arr:
-        print("line = " + line)
-        bytes += words(line)
-        bytes += " "
-    bn = len(bytes.split(" "))
-    br = 511 - bn
-    for i in range(br):
-        bytes += "00 "
-    bytes += "55 AA"
-    return bytes
+def varify(val,name):
+         
+
+def parse(line):
+    for word in line.split(" "):
+        if word[0] == "$":
+            # variable assigement
+            asign = word[1:].split("=")
+            var = asign[0]
+            val = asign[1]
+            vars[var] = val
+        elif word in defs:
+            # function call
+            call = word
+            args = line.split("(")[1].split(")")[0].split(",")
+            for arg in args:
+                if arg in vars:
+                    arg = vars[arg]
+                elif "\"" in arg or "\'" in arg:
+                    arg = arg.replace("\"","")
+                    arg = arg.replace("\'","")
+                    arg =  hexify(arg)
+
+            return defs[call].format(*args)
 
 
-    
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:
@@ -57,7 +69,14 @@ if __name__ == "__main__":
         if not os.path.exists(path):
             print("File not found: " + path)
             sys.exit(1)
-    lines = readfile(path)
-    data = parse(lines)
-    outfile = path.replace(".ce",".bin")
-    os.system(f"echo {data} | xxd -r -p -  {outfile}")
+    
+    with open(path, "r") as f:
+        code = f.read()
+        f.close()
+    
+    # Here we need to scopify the code
+    scope = code
+    lines = lineify(scope)
+    for line in lines:
+        parse(line)
+

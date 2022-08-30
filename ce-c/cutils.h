@@ -1,0 +1,1 @@
+char* substr(const char *src, int m, int n);
