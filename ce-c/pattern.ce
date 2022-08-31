@@ -1,5 +1,4 @@
-print("X")
-{
-    @setal address
-    @int 0x10
-}
+
+$var = "Hello World!" ;
+
+

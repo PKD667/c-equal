@@ -3,9 +3,11 @@
 #include "string.h"
 #include "stdbool.h"
 
-#include "structs.h"
-#include "cutils.h"
-#include "main.h"
+#include "../include/structs.h"
+#include "../include/main.h"
+#include "../include/add.h"
+
+
 
 unsigned int parser(char* path,struct scope** scope_arr,char** code)
 {
@@ -42,9 +44,11 @@ unsigned int parser(char* path,struct scope** scope_arr,char** code)
                 //printf("end of string\n");
                 // store buff_str in the executable
                 short unsigned int addr = add_data((unsigned char*)buff_str, i_str);
-                (*code)[n++] = addr;
+                (*code)[n++] = '/';
+                (*code)[n++] = *((unsigned char*)(&(addr)) + 0);
+                (*code)[n++] = *((unsigned char*)(&(addr)) + 1);
                 // print the addr in the code
-                printf("addr: %d\n",(*code)[n - 1]);
+                printf("addr: %x %x\n",(*code)[n - 1],(*code)[n - 2]);
 
 
                 p_str = false;

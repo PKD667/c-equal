@@ -11,16 +11,14 @@ struct scope {
     struct scope** childrens;
     unsigned int c_childrens;
 }; 
+
 struct func {
     char* name;
-    int argc;
-    char** argv;
+    short unsigned int addr;
 };
 struct var {
     // the name is only used in the compiler, it wont be in the executable
     char* name;
-    // the value is the address of the variable in the executable
-    unsigned char* val;
-    // the size of the variable
-    unsigned int size;
+    //  address of the variable in the executable
+    unsigned short int addr;
 };
