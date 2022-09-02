@@ -1,5 +1,7 @@
 #pragma once
 
+#include "types.h"
+
 struct line {
     unsigned int start;
     unsigned int end;
@@ -14,11 +16,11 @@ struct scope {
 
 struct func {
     char* name;
-    short unsigned int addr;
+    word addr;
 };
 struct var {
     // the name is only used in the compiler, it wont be in the executable
     char* name;
     //  address of the variable in the executable
-    unsigned short int addr;
+    word addr;
 };

@@ -3,8 +3,9 @@
 #include "string.h"
 
 #include "../include/globals.h"
+#include "../include/add.h"
 
-unsigned char* OUTPUT;
+byte* OUTPUT;
 
 unsigned int CODE_PTR;
 unsigned int DATA_PTR;
@@ -57,6 +58,16 @@ int set_var(char*name, short unsigned int addr)
     new.addr = addr;
 
     VAR_TABLE[VAR_COUNT++] = &new;
+    return 0;
+}
+
+short unsigned int get_var(char*name)
+{
+    for (int i = 0; i < VAR_COUNT; i++) {
+        if (strcmp(VAR_TABLE[i]->name, name) == 0) {
+            return VAR_TABLE[i]->addr;
+        }
+    }
     return 0;
 }
 

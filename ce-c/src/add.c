@@ -11,11 +11,7 @@ int add_func(char* name, unsigned char* code, unsigned int c_code)
     new_func.addr = FUNC_COUNT;
     for (int i = 0; i < c_code; i++)
     {
-        if (FUNC_COUNT >= MAX_FUNC)
-        {
-            printf("Too many functions\n");
-            return -1;
-        }
+        
 
         if (OUTPUT[FUNC_PTR] != '\0')
         {
@@ -25,7 +21,14 @@ int add_func(char* name, unsigned char* code, unsigned int c_code)
         
         OUTPUT[FUNC_PTR++] = code[i];
     }
+
     FUNC_TABLE[FUNC_COUNT++] = &new_func;
+    // print all functions
+    printf("functions:\n");
+    for (int i = 0; i < FUNC_COUNT; i++)
+    {
+        printf("%d - %s\n",i,FUNC_TABLE[i]->name);
+    }
     return 0;
 }
 
@@ -34,6 +37,7 @@ short unsigned int add_data(unsigned char* data, unsigned int c_data)
     short unsigned int addr = DATA_PTR;
     for (int i = 0; i < c_data; i++)
     {
+        printf("adding data %x at %x\n", data[i], DATA_PTR);
         OUTPUT[DATA_PTR++] = data[i];
     }
     OUTPUT[DATA_PTR++] = 0x00;
@@ -53,6 +57,7 @@ int add_var(char* name, unsigned char* data, unsigned int c_data)
 // for now we only alllow one arg
 int add_call(char* func_name,short unsigned int arg16)
 {
+    printf("adding call to %s\n", func_name);
     // find func in funcs
     short unsigned int func_addr = 0;
     for (int i = 0; i < FUNC_COUNT; i++)

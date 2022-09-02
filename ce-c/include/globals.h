@@ -1,8 +1,7 @@
 #pragma once
 
 #include "structs.h"
-
-
+#include "types.h"
 
 #define OFFSET 0x7c00
 
@@ -17,7 +16,7 @@
 
 #define SIZE 0x200
 
-extern unsigned char* OUTPUT;
+extern byte* OUTPUT;
 
 extern unsigned int CODE_PTR;
 extern unsigned int DATA_PTR;

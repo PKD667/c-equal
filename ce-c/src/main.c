@@ -5,7 +5,7 @@
 #include "../include/globals.h"
 #include "../include/main.h"
 #include "../include/structs.h"
-#include "../include/cutils.h"
+#include "../include/array.h"
 #include "../include/add.h"
 
 
@@ -17,15 +17,17 @@ int main(int argc, char *argv[])
     
     printf("parsing scopes\n");
     struct scope* scopes;
-    char* code;
-    unsigned int scope_count = parser(argv[1],&scopes,&code);
+    byte* code;
+    int code_size;
+    unsigned int scope_count = parser(argv[1],&scopes,&code,&code_size);
 
     //print code
     printf("code:\n");
-    for (int i = 0; i < strlen(code); i++)
+    for (int i = 0; i < code_size; i++)
     {
         printf("%c ",code[i]);
     }
+
     printf("\n");
     // print lines values
     printf("lines:\n");
@@ -33,9 +35,20 @@ int main(int argc, char *argv[])
     {
         for (int j = 0; j < scopes[i].c_lines; j++)
         {
-            printf("%d %d",scopes[i].lines[j].start,scopes[i].lines[j].end);
+            printf("%d %d\n",scopes[i].lines[j].start,scopes[i].lines[j].end);
         }
         printf("\n");
+    }
+    
+    // load assets here
+    printf("loading assets\n");
+    load_asset("print");
+
+    // print all functions
+    printf("functions:\n");
+    for (int i = 0; i < FUNC_COUNT; i++)
+    {
+        printf("%d - %s\n",i,FUNC_TABLE[i]->name);
     }
 
     for (int i = 0; i < scope_count+1; i++)
@@ -50,48 +63,10 @@ int main(int argc, char *argv[])
                 continue;
             }
 
-            char *line = substr(code, scopes[i].lines[j].start, scopes[i].lines[j].end);
+            byte *line = subarr(code, scopes[i].lines[j].start, scopes[i].lines[j].end);
             printf("Line is %s \n",line);
 
-            if (line[0] == '$')
-            {
-                printf("detected variable setting \n");
-                // name = line before '='
-                // value = line after '='
-                char* name = substr(line, 1, strchr(line, '=')-line);
-                char* value = substr(line, strchr(line, '=')-line+1, strlen(line));
-                printf("name: %s\n", name);
-                printf("value: %s\n", value);
-                unsigned short int address;
-                if (value[0] == '/')
-                {
-                    // detected prepocessed value
-                    printf("detected preprocessed value\n");
-                    
-                    unsigned char bytes_val[2];
-                    bytes_val[0] = value[1];
-                    bytes_val[1] = value[2]; 
-                    address = (unsigned short int)(bytes_val[0]+bytes_val[1]);
-                    printf("address: %x\n", address);
-
-                }
-                else
-                {
-                    int int_value = atoi(value);
-                    unsigned char bytes_val[4];
-                    bytes_val[0] = (int_value >> 24) & 0xFF;
-                    bytes_val[1] = (int_value >> 16) & 0xFF;
-                    bytes_val[2] = (int_value >> 8) & 0xFF;
-                    bytes_val[3] = int_value & 0xFF;
-                    address = add_data(bytes_val, strlen(value));
-                }
-                printf("address: %x\n", address);
-                set_var(name, address);
-
-            }
-            else {
-                printf("Unknown stuff\n");
-            }
+            parse_line(line, scopes[i].lines[j].end - scopes[i].lines[j].start);
         }
     }
     printf("Writing to file\n");

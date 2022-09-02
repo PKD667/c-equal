@@ -9,11 +9,11 @@
 
 
 
-unsigned int parser(char* path,struct scope** scope_arr,char** code)
+unsigned int parser(char* path,struct scope** scope_arr,byte** code,int* code_size)
 {
     FILE *file = fopen(path, "r");
     size_t n = 0;
-    (*code) = (char*)calloc(1024, sizeof(char)); 
+    (*code) = (byte*)calloc(1024, sizeof(char)); 
     int c;
 
     if (file == NULL)
@@ -89,7 +89,7 @@ unsigned int parser(char* path,struct scope** scope_arr,char** code)
     }
 
     fclose(file);
-
+    (*code_size) = n;
 
     return c_scopes;
 
