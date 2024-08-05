@@ -1,3 +1,5 @@
+*This project is a WIP, its kinda bad. I'm working on something else very similar that might replace it soon*
+
 # c-equal
 
 ## Description
