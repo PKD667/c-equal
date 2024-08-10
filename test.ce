@@ -1,0 +1,16 @@
+// this is a base C Equal file
+
+
+t32 add(t32 a, t32 b) {
+    return a + b;
+}
+
+t32 main () {
+
+    print("Hello World\n");
+
+    t16 a = 5;
+    t16 b = 6;
+    t32 c = add(a, b);
+    return c;
+}
