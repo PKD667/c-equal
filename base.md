@@ -22,6 +22,8 @@
  - `t32`
  - `t64`
 
+*Note: Higher order types will be implemeted in the default lib.*
+
 #### Operators
 - `+`
 - `-`
@@ -30,6 +32,11 @@
 - `=`
 - `==`
 - `!'
+- `!=`
+- `>`
+- `<`
+- `>=`
+- `<=`
 
 ## Syntax
 
