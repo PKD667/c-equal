@@ -2,7 +2,7 @@
 BINARY = bin/cc
 
 #The target library
-LIBS = lib/cutils.a
+LIB_DIR = lib
 
 # The directories containing source files
 SRC_DIR = src
@@ -19,6 +19,10 @@ CC = gcc
 # The C flags to use
 CFLAGS = -I$(INC_DIR) 
 
+LOCAL_LIBS = $(wildcard $(LIB_DIR)/*/*.a)
+
+LIBS = $(LOCAL_LIBS)
+
 # The source files
 SOURCES = $(wildcard $(SRC_DIR)/*.c)
 
@@ -26,7 +30,10 @@ SOURCES = $(wildcard $(SRC_DIR)/*.c)
 OBJECTS = $(SOURCES:$(SRC_DIR)/%.c=$(OBJ_DIR)/%.o)
 
 # The default target
-all: $(BINARY)
+all: libs $(BINARY)
+
+libs:
+	for i in $(LOCAL_LIBS); do make -C $$(dirname $$i) all; done
 
 # Link the objects into the binary
 $(BINARY): $(OBJECTS) $(LIBRARY)
