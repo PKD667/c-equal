@@ -4,7 +4,7 @@
 #include <stdlib.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include "limits.h" 
+#include "limits.h"
 
 
 
@@ -31,7 +31,7 @@ struct AST* parse_op(int* tokens, int* index) {
     int len = 0;
     while (!t_isop(tokens[*index + len])) {
 
-        // skip any 
+        // skip any
 
         len++;
     }
@@ -74,7 +74,7 @@ struct AST* parse_op(int* tokens, int* index) {
             break;
         case T_OR:
             ast->op->tag = AST_OR;
-            break;  
+            break;
         case T_NOT:
             ast->op->tag = AST_NOT;
             break;
@@ -117,13 +117,13 @@ struct AST* parse_arg(int t) {
 }
 
 struct AST* parse_specifier(int t) {
-    
+
         dbg(2, "Parsing specifier %d", t);
-    
+
         struct AST* ast = malloc(sizeof(struct AST));
         ast->type = AST_SPEC;
         ast->spec = malloc(sizeof(struct ASTspec));
-    
+
         switch (t) {
             case T_T8:
                 ast->spec->tag = AST_8;
@@ -139,14 +139,14 @@ struct AST* parse_specifier(int t) {
                 exit(1);
                 break;
         }
-    
+
         return ast;
 }
 
 struct AST* parse_loop(int* tokens, int* index) {
 
     dbg(2, "Parsing loop from %d", tokens[*index]);
-    
+
     // Syntaxic definition
     /*
         loop -> while ( condition ) block
@@ -459,7 +459,7 @@ struct AST* parse_declare(int* tokens, int* index) {
             capacity *= 2;
             ast->stmt->args = realloc(ast->stmt->args, capacity * sizeof(struct AST*));
         }
-        // first we should have a type indicator 
+        // first we should have a type indicator
         if (!t_istype(tokens[*index])) {
             msg(ERROR,"Expected type in declare argument\n");
             exit(1);
@@ -473,8 +473,8 @@ struct AST* parse_declare(int* tokens, int* index) {
 
         if (tokens[*index] == T_COMMA) {
             (*index)++;
-        }  
-        
+        }
+
     }
 
     (*index)++;
@@ -494,21 +494,21 @@ struct AST* parse_block(int* tokens, int* index) {
             stmts -> stmt stmts | stmt
                 - <stmt> <stmts> | <stmt>
         */
-    
+
         struct AST* ast = malloc(sizeof(struct AST));
         ast->type = AST_BLOCK;
         ast->block = malloc(sizeof(struct ASTblock));
         ast->block->size = 0;
         int capacity = 10;
         ast->block->childs = malloc(capacity * sizeof(struct AST));
-    
+
         if (tokens[*index] != T_LBRACE) {
             printf("Expected '{' in block\n");
             exit(1);
         }
-    
+
         (*index)++;
-    
+
         while (tokens[*index] != T_RBRACE) {
             if (ast->block->size >= capacity) {
                 capacity *= 2;
@@ -517,9 +517,9 @@ struct AST* parse_block(int* tokens, int* index) {
             ast->block->childs[ast->block->size] = parse(tokens, index,0);
             ast->block->size++;
         }
-    
+
         (*index)++;
-    
+
         return ast;
 }
 
@@ -558,10 +558,12 @@ struct AST* parse_opblock(int* tokens, int* index) {
 
 struct AST* parse(int* tokens, int* index,int len) {
 
+    msg(INFO,"Parsing %d tokens...", len);
+
     static int rec = 0;
     rec++;
     if (rec > 10) {
-        msg(ERROR, "Recursion limit reached\n");
+        msg(ERROR, "Recursion limit reached");
         exit(1);
     }
 
@@ -570,12 +572,12 @@ struct AST* parse(int* tokens, int* index,int len) {
     }
 
     // The parser will be a recursive descent parser
-    
+
     // The parser need to identify structures in the tokenized code
     // the parser will return an AST (Abstract Syntax Tree) element.
 
     // in order to identify structure we will use a pattern table
-    
+
     // create a parser variable (function pointer) to the parse function
     // the parser will return an AST element
 
@@ -583,6 +585,7 @@ struct AST* parse(int* tokens, int* index,int len) {
     pattern* pattern = match_pattern(tokens + *index, len);
     if (pattern == NULL) {
         // Handle error: no matching pattern found
+        msg(ERROR,"No matching pattern found\n");
         return NULL;
     }
 

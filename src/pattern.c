@@ -95,7 +95,6 @@ pattern patterns[] = {
     {(int[]) {T_NUMBER,OR,VAR,OR,OP,OR,OP_BLOCK,STOP}, VALUE, NULL},
     { NULL, 0, NULL }
 };
-  
 
 int pattlen(int* pattern) {
     int i = 0;
@@ -118,62 +117,17 @@ pattern get_pattern(int tag) {
 int match(int token, int** pattern);
 int matches(int* tokens, int* pattern,int len);
 
-int match_WILDCARD(int token, int** pattern) {
-
-    if (**pattern == WILDCARD) {
-
-        int* n_pattern = *pattern + 1;
-        if (match(token, &n_pattern)) {
-            *pattern = n_pattern;
-            return 1;
-        }
-        return 1;
-    }
-    return 0;
-}
-
-int match_ANY(int token, int** pattern) {
-    if (**pattern == ANY) {
-        (*pattern)++;
-        return 1;
-    }
-    return 0;
-}
-
-
-
-
-int match_TYPE(int token, int** pattern) {
-
-    if (**pattern == TYPE) {
-        if (t_istype(token)) {
-            (*pattern)++;
-            return 1;
-        }
-    }
-    return 0;
-}
-
-int match_VAR(int token, int** pattern) {
-    if (**pattern == VAR) {
-        if (t_isvar(token)) {
-            (*pattern)++;
-            return 1;
-        }
-    }
-    return 0;
-}
-
 
 
 int match(int token, int** pattern) {
-      if (match_ANY(token, pattern)) {
-    } else if (match_WILDCARD(token, pattern)) {
-    } else if (match_VAR(token, pattern)) {
-    } else if (match_TYPE(token, pattern)) {
-    } else if (token == **pattern) {
+
+    dbg(2,"Matching %s == %s\n",get_token_string(token),get_pattern_string(**pattern));
+
+    if (token == **pattern) {
+        printf("Normal Match \n");
         (*pattern)++;
     } else {
+        printf("Not matched\n");
         return 0;
     }
 
@@ -188,8 +142,9 @@ int matches(int* tokens, int* pattern,int len) {
 
 
     static int depths = 0;
+    printf("Going into %d\n",depths+1);
     depths++;
-    if (depths > 10) {
+    if (depths > 5) {
         msg(ERROR,"Pattern too deep");
         exit(1);
     }
@@ -206,51 +161,104 @@ int matches(int* tokens, int* pattern,int len) {
         len = INT_MAX;
     }
 
-    
+    int* btok = tokens;
+    while (!(*pattern == STOP || tokens - btok >= len)) {
 
-    for (int* btok = tokens ;*tokens != T_EOF || tokens - btok  < len; tokens++) {
-
-        if (*pattern == STOP) {
-            return 0;
+        if (*tokens == T_EOF) {
+            dbg(2,"EOF (shouldn't be here)");
+            depths -= 1;
+            return -2;
         }
 
+
+        beefor:
+
+        dbg(2,"PATTERN: %s",get_pattern_string(*pattern));
+        dbg(2,"TOKEN  : %s",get_token_string(*tokens));
+        dbg(2,"%d / %d",tokens - btok,len);
+
         if (*pattern == OR) {
+            dbg(2,"GOT OR DONE");
             // this mean we matched the previous pattern
-            // thus we should skip to the end of the OR
-            pattern++;
-            while (*pattern != STOP && *(pattern+1) ==  OR) {
-                pattern++;
+            // thus we should skip to the end of the OR*
+            printf("Skipping");
+            while (*pattern != STOP && *pattern ==  OR) {
+                printf("%s %s ",get_pattern_string(*pattern),get_pattern_string(*(pattern+1)));
+                pattern+=2;
             }
-        }       
+            printf("\n");
+            goto beefor;
+        }
+
 
         if (*pattern == OPTIONAL) {
             printf("Checking for optional : %s\n",get_pattern_string(*(pattern+1)));
-            if (matches(tokens, pattern + 1,1) == 0) {
+            if (matches(&(*tokens), pattern + 1,1) == 0) {
                 pattern+=2;
             }
             pattern++;
+            tokens++;
+        } else if (*pattern == ANY) {
+            pattern++;
+            tokens++;
+        } else if (*pattern == WILDCARD) {
+            dbg(2,"WILDCARD");
+            int* ntok = tokens;
+            pattern++;
+            for (int k = 0; k < 40; k++) {
+                dbg(2,"%s ?= %s",get_token_string(*tokens),get_pattern_string(*pattern));
+                if (matches(ntok,pattern,1) == 0) {
+                    pattern++;
+                    tokens = ntok;
+                    dbg(2,"OUT WILDCARD");
+                    break;
+                }
+                ntok++;
+            }
+            tokens++;
+        } else if (*pattern == VAR) {
+            if (t_isvar(*tokens)) {
+                dbg(2,"%s IS VAR",get_token_string(*tokens));
+                pattern++;
+            }
+            tokens++;
+        } else if (*pattern == TYPE) {
+            if (t_istype(*tokens)) {
+                dbg(2,"%s IS TYPE",get_token_string(*tokens));
+                pattern++;
+            } else {
+                printf("Failed to match %s\n",get_token_string(*tokens));
+                depths -= 1;
+                return -1;
+            }
+            tokens++;
         } else if (*pattern < 0) {
             printf("Recursing into pattern %s\n",get_pattern_string(*pattern));
-            if (matches(tokens, get_pattern(*pattern).exp,len) != 0) {
+            if (matches(&(*tokens), get_pattern(*pattern).exp,len) != 0) {
+                depths -= 1;
                 return -1;
             }
             pattern++;
-        } else if (match(*tokens, &pattern)) {
-            printf("Matched %s\n",get_token_string(*tokens));
+            tokens++;
+        } else if (*tokens == *pattern) {
+            printf("Matched raw %s == %s\n",get_token_string(*tokens),get_pattern_string(*pattern));
+            tokens++;
+            pattern++;
         } else if (*(pattern+1) == OR) {
+            dbg(2,"Inside OR, skipping to next ORed value");
             pattern += 2;
         } else {
             printf("Failed to match %s\n",get_token_string(*tokens));
+            depths -= 1;
             return -1;
         }
 
 
     }
 
-    return -2;
-
-
-
+    dbg(2,"Found Something at %d",depths);
+    depths -= 1;
+    return 0;
 }
 
 pattern* match_pattern(int* tokens,int len) {
@@ -266,6 +274,7 @@ pattern* match_pattern(int* tokens,int len) {
         dbg(2,"Pattern (%d): ",i);
         visualize_pattern(patterns[i].exp);
         if (matches(tokens, patterns[i].exp,len) == 0) {
+            msg(INFO,"FOUND A PATTERN MOTHERFUCKER!!!");
             return &patterns[i];
         }
         printf("\n");
