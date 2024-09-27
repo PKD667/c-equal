@@ -1,16 +1,37 @@
 // this is a base C Equal file
 
+t32 fibonacci(t32 n) {
+    t32 t1 = 0;
+    t32 t2 = 1;
+    t32 nextTerm;
+    t32 i;
 
-t32 add(t32 a, t32 b) {
-    return a + b;
+    print("Fibonacci Series: ");
+    print(t1);
+    print(", ");
+    print(t2);
+    print(", ");
+
+    for (i = 3; i <= n; i=i+1) {
+        nextTerm = t1 + t2;
+        t1 = t2;
+        t2 = nextTerm;
+
+        print(nextTerm);
+        if (i < n) {
+            print(", ");
+        }
+    }
+    print("\n");
+    return 0;
 }
 
-t32 main () {
+t32 main() {
+    t32 n = 10; // Number of terms
 
-    print("Hello World\n");
+    fibonacci(n);
 
-    t16 a = 5;
-    t16 b = 6;
-    t32 c = add(a, b);
-    return c;
+    return 0;
 }
+
+main();

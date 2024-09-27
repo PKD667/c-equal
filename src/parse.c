@@ -6,10 +6,69 @@
 #include <stdio.h>
 #include "limits.h"
 
+int linectrl = 0;
 
+struct AST* parse_arg(int t) {
 
+    dbg(2, "Parsing argument %d", t);
+
+    struct AST* ast = malloc(sizeof(struct AST));
+    if (t < 0 ) {
+        dbg(3,"Parsing variable");
+        // variable
+        ast->type = AST_VALUE;
+        ast->value = malloc(sizeof(struct ASTvalue));
+        ast->value->tag = AST_VAR;
+        ast->value->v = -t;
+    }
+    else if (t == T_NUMBER || t == T_STRING) {
+        // literal
+        dbg(3,"Parsing literal");
+        ast->type = AST_VALUE;
+        ast->value = malloc(sizeof(struct ASTvalue));
+        ast->value->tag = AST_LIT;
+        ast->value->v = get_laddr();
+        dbg(3,"Literal address: %d", ast->value->v);
+    }
+    else {
+        msg(ERROR, "Unknown argument type\n");
+        return NULL;
+    }
+    return ast;
+}
+
+struct AST* parse_value(int* tokens, int* index) {
+
+    dbg(2, "Parsing value from %d", tokens[*index]);
+
+    struct AST* ast = malloc(sizeof(struct AST));
+    ast->type = AST_VALUE;
+    ast->value = malloc(sizeof(struct ASTvalue));
+
+    // Syntaxic definition
+    /*
+        value -> var
+            - <var>
+        value -> lit
+            - <lit>
+    */
+
+    // Index is set at the beginning of a value
+   // use parse_arg to parse the value
+    ast = parse_arg(tokens[*index]);
+
+    (*index)++;
+
+    return ast;
+}
 
 struct AST* parse_op(int* tokens, int* index) {
+
+    int nset = 0;
+    if (!linectrl) {
+        linectrl = 1;
+        nset = 1;
+    }
 
     dbg(2, "Parsing operation from %d", tokens[*index]);
 
@@ -27,21 +86,17 @@ struct AST* parse_op(int* tokens, int* index) {
     // The arguments are not yet parsed, and we need to recursively parse them
 
     // Parse the left argument
-    // get the len of the left argument
-    int len = 0;
-    while (!t_isop(tokens[*index + len])) {
 
-        // skip any
 
-        len++;
+    // first token is the left argument
+    // first check if it is a variable or a literal
+    struct AST* left = parse_arg(tokens[*index]);
+    if (left == NULL) {
+        msg(ERROR, "Failed to parse left argument\n");
+        return NULL;
     }
 
-    if (len == 0) {
-        // operation is one sided
-        ast->op->left = NULL;
-    } else {
-        ast->op->left = parse(tokens, index, len);
-    }
+    (*index)++;
 
     // Parse the operator
     switch (tokens[*index]) {
@@ -63,6 +118,18 @@ struct AST* parse_op(int* tokens, int* index) {
         case T_EQ:
             ast->op->tag = AST_CMP;
             break;
+        case T_LT:
+            ast->op->tag = AST_CHLT;
+            break;
+        case T_GT:
+            ast->op->tag = AST_CHGT;
+            break;
+        case T_LTE:
+            ast->op->tag = AST_CHLTE;
+            break;
+        case T_GTE:
+            ast->op->tag = AST_CHGTE;
+            break;
         case T_LSHIFT:
             ast->op->tag = AST_SHL;
             break;
@@ -78,43 +145,29 @@ struct AST* parse_op(int* tokens, int* index) {
         case T_NOT:
             ast->op->tag = AST_NOT;
             break;
+        case T_ASSIGN:
+            ast->op->tag = AST_ASSIGN;
+            break;
         default:
             printf("Unknown operator: %d\n", tokens[*index]);
             exit(1);
             break;
     }
     (*index)++;
+    
+    struct AST* right = parse(tokens, index,0);
+    dbg(3,"Got right arg");
 
-    ast->op->right = parse(tokens, index,0);
+    ast->op->left = left;
+    ast->op->right = right;
+
+    if (tokens[*index] == T_SEMICOLON && nset) (*index)++;
+    linectrl -= nset;
 
     return ast;
 }
 
-struct AST* parse_arg(int t) {
 
-    dbg(2, "Parsing argument %d", t);
-
-    struct AST* ast = malloc(sizeof(struct AST));
-    if (t < 0 ) {
-        // variable
-        ast->type = AST_VALUE;
-        ast->value = malloc(sizeof(struct ASTvalue));
-        ast->value->tag = AST_VAR;
-        ast->value->v = -t;
-    }
-    else if (t == T_NUMBER || t == T_STRING) {
-        // literal
-        ast->type = AST_VALUE;
-        ast->value = malloc(sizeof(struct ASTvalue));
-        ast->value->tag = AST_LIT;
-        ast->value->v = get_laddr();
-    }
-    else {
-        msg(ERROR, "Unknown argument type\n");
-        exit(1);
-    }
-    return ast;
-}
 
 struct AST* parse_specifier(int t) {
 
@@ -192,7 +245,22 @@ struct AST* parse_loop(int* tokens, int* index) {
         condblock->block->childs = malloc(3 * sizeof(struct AST));
 
         for (int i = 0; i < 3; i++) {
+            dbg(3, "Parsing for loop child %d", i);
             condblock->block->childs[i] = parse(tokens, index,0);
+            // check for etra semicolons
+            if (tokens[*index] == T_SEMICOLON) {
+                (*index)++;
+            } else if (tokens[*index] == T_RPAREN) {
+                dbg(3, "End of for loop condition");
+                break;
+            } else {
+                msg(ERROR, "Expected ';' in loop\n");
+                // visualise the current token
+                printf("Current token: %s\n", get_token_string(tokens[*index]));
+                for (int j = *index+1; j < (*index + 5); j++) {
+                    printf("Token %d: %s\n", j, get_token_string(tokens[j]));
+                }
+            }
         }
         condblock->block->size = 3;
         ast->loop->condition = condblock;
@@ -211,6 +279,12 @@ struct AST* parse_loop(int* tokens, int* index) {
 }
 
 struct AST* parse_call(int* tokens, int* index) {
+
+    int nset = 0;
+    if (!linectrl) {
+        linectrl = 1;
+        nset = 1;
+    }
 
     dbg(2, "Parsing call from %d", tokens[*index]);
 
@@ -248,6 +322,7 @@ struct AST* parse_call(int* tokens, int* index) {
         exit(1);
     }
     int mlen = pi - *index;
+    dbg(3,"mlen = %d",mlen);
 
     while (tokens[*index] != T_RPAREN) {
 
@@ -255,24 +330,39 @@ struct AST* parse_call(int* tokens, int* index) {
         if (skip_to(tokens, &ci, T_COMMA, mlen) == 0) {
             mlen = ci - *index;
         }
+        dbg(3,"mlen = %d",mlen);
 
         if (ast->stmt->argc >= capacity) {
             capacity *= 2;
             ast->stmt->args = realloc(ast->stmt->args, capacity * sizeof(struct AST*));
         }
-        ast->stmt->args[ast->stmt->argc] = parse(tokens, index, mlen);
+        ast->stmt->args[ast->stmt->argc] = parse_arg(tokens[*index]);
         ast->stmt->argc++;
         (*index)++;
         if (tokens[*index] == T_COMMA) {
             (*index)++;
         }
     }
+    (*index)++;
 
+    dbg(3,"Got call() args");
+    // check for semicolon
+    if (tokens[*index] == T_SEMICOLON && nset ) {
+        (*index)++;
+    }
+    linectrl -= nset;
+    
     return ast;
 }
 
 
 struct AST* parse_stmt(int* tokens, int* index) {
+
+    int nset = 0;
+    if (!linectrl) {
+        linectrl = 1;
+        nset = 1;
+    }
 
     dbg(2, "Parsing statement from %d", tokens[*index]);
 
@@ -304,8 +394,10 @@ struct AST* parse_stmt(int* tokens, int* index) {
             // get semicolon index
             int si = *index;
             if (skip_to(tokens,&si,T_SEMICOLON,0) != 0) {
+                dbg(3,"Found semicolon");
                 msg(ERROR,"Missing ';' after return");
             }
+            printf("si: %d",si - *index);
 
             if (si - *index > 1) {
                 dbg(3,"Found args");
@@ -317,6 +409,8 @@ struct AST* parse_stmt(int* tokens, int* index) {
                 ast->stmt->args = NULL;
                 ast->stmt->argc = 0;
             }
+            (*index)++;
+
             break;
         case T_BREAK:
 
@@ -338,7 +432,9 @@ struct AST* parse_stmt(int* tokens, int* index) {
             break;
     }
 
-    (*index)++;
+    // skip semicolon
+    if (nset && tokens[*index] == T_SEMICOLON) (*index)++;
+    linectrl -= nset;
 
     return ast;
 }
@@ -415,20 +511,20 @@ struct AST* parse_condition(int* tokens, int* index) {
 }
 
 
-struct AST* parse_declare(int* tokens, int* index) {
+struct AST* parse_function_declare(int* tokens, int* index) {
 
     dbg(2, "Parsing declare from %d", tokens[*index]);
 
     struct AST* ast = malloc(sizeof(struct AST));
     ast->stmt = malloc(sizeof(struct ASTstmt));
-    ast->stmt->tag = AST_DECLARE;
+    ast->stmt->tag = AST_FDECLARE;
 
     if (!t_istype(tokens[*index])) {
         printf("Expected type in declare\n");
         exit(1);
     }
 
-    ast->stmt->tag = AST_DECLARE;
+    ast->stmt->tag = AST_FDECLARE;
     // first argument is the type
     int capacity = 2;
     ast->stmt->argc = 0;
@@ -479,6 +575,77 @@ struct AST* parse_declare(int* tokens, int* index) {
 
     (*index)++;
 
+    return ast;
+
+}
+
+struct AST* parse_variable_declare(int* tokens, int* index) {
+
+    dbg(2, "Parsing declare from %d", tokens[*index]);
+
+    int nset = 0;
+    if (!linectrl) {
+        linectrl = 1;
+        nset = 1;
+    }
+
+    struct AST* ast = malloc(sizeof(struct AST));
+    ast->stmt = malloc(sizeof(struct ASTvalue));
+    ast->stmt->tag = AST_VAR;
+
+    if (!t_istype(tokens[*index])) {
+        printf("Expected type in declare\n");
+        exit(1);
+    }
+
+    ast->stmt->tag = AST_VDECLARE;
+    // first argument is the type
+    int capacity = 2;
+    ast->stmt->argc = 0;
+    ast->stmt->args = malloc(capacity * sizeof(struct AST*));
+    ast->stmt->args[0] = parse_specifier(tokens[*index]);
+    (*index)++;
+    ast->stmt->argc++;
+    // second argument is the variable
+    if (!t_isvar(tokens[*index])) {
+        printf("Expected variable in declare\n");
+        exit(1);
+    }
+    ast->stmt->args[1] = parse_arg(tokens[*index]);
+    (*index)++;
+    ast->stmt->argc++;
+
+    // get distance to semicolon
+    // get semicolon index
+    int si = *index;
+    if (skip_to(tokens,&si,T_SEMICOLON,0) != 0) {
+        dbg(3,"Found semicolon");
+        msg(ERROR,"Missing ';' after return");
+    }
+    int sd = si - *index; 
+
+    dbg(3,"Semicolon distance: %d",sd);
+
+    if (si == 0) {
+        // no assigned init value 
+        // skip to next token
+        (*index)++;
+    } else {
+        if (tokens[*index] == T_ASSIGN) {
+            // assigned init value
+            (*index)--;
+
+            ast->stmt->args[2] = parse(tokens, index,0);
+            ast->stmt->argc++;
+        } 
+        if (tokens[*index] != T_SEMICOLON && nset) {
+            printf("Expected ';' in declare\n");
+            printf("Current token: %s\n", get_token_string(tokens[*index]));
+            exit(1);
+        }
+        (*index)++;
+    }
+    linectrl -= nset;
     return ast;
 
 }
@@ -555,7 +722,6 @@ struct AST* parse_opblock(int* tokens, int* index) {
     return ast;
 }
 
-
 struct AST* parse(int* tokens, int* index,int len) {
 
     msg(INFO,"Parsing %d tokens...", len);
@@ -586,6 +752,10 @@ struct AST* parse(int* tokens, int* index,int len) {
     if (pattern == NULL) {
         // Handle error: no matching pattern found
         msg(ERROR,"No matching pattern found\n");
+        if (DEBUG) {
+            msg(FATAL,"Exiting...");
+            exit(1);
+        }
         return NULL;
     }
 
@@ -610,6 +780,7 @@ struct AST* parse(int* tokens, int* index,int len) {
     rec--;
     return ast;
 }
+
 
 struct ASTblock* parsefile(int* tokens, char** litterals) {
 
@@ -638,47 +809,194 @@ struct ASTblock* parsefile(int* tokens, char** litterals) {
 
 
 void visualize_ast(struct AST ast) {
-    // print the AST in a tree like structure
-    // we will use a recursive function to print the tree
+    static int indent = 0;
+    indent++;
+
+    // Print the AST in a tree-like structure using a recursive function
+    for (int i = 0; i < indent; i++) {
+        printf("  ");
+    }
     printf("---\n");
+
+    for (int i = 0; i < indent; i++) {
+        printf("  ");
+    }
     switch (ast.type) {
         case AST_BLOCK:
             printf(" - Block - \n");
             for (int i = 0; i < ast.block->size; i++) {
+                for (int j = 0; j < indent; j++) {
+                    printf("  ");
+                }
                 printf("Child %d\n", i);
-                visualize_ast(*ast.block->childs[i]);
+                if (ast.block->childs[i] != NULL) {
+                    visualize_ast(*ast.block->childs[i]);
+                } else {
+                    for (int j = 0; j < indent; j++) {
+                        printf("  ");
+                    }
+                    printf("NULL child\n");
+                }
             }
             break;
         case AST_STMT:
             printf(" - Statement - \n");
+            for (int i = 0; i < indent; i++) {
+                printf("  ");
+            }
+            switch (ast.stmt->tag) {
+                case AST_FDECLARE: printf("Function Declaration\n"); break;
+                case AST_VDECLARE: 
+                    printf("Variable Declaration\n"); 
+                    visualize_ast(*ast.stmt->args[0]);
+                    visualize_ast(*ast.stmt->args[1]);
+                    if (ast.stmt->argc > 2) {
+                        visualize_ast(*ast.stmt->args[2]);
+                    }
+                    break;
+                case AST_CALL: printf("Function Call\n"); break;
+                case AST_RETURN:
+                    printf("Return Statement\n");
+                    if (ast.stmt->argc > 0) {
+                        for (int i = 0; i < ast.stmt->argc; i++){
+                            visualize_ast(*ast.stmt->args[i]);
+                        }
+                    } else {
+                        for (int i = 0; i < indent; i++) {
+                            printf("  ");
+                        }
+                        printf("NULL return value\n");
+                    }
+                    break;
+                case AST_BREAK: printf("Break Statement\n"); break;
+                case AST_CONTINUE: printf("Continue Statement\n"); break;
+                default: printf("Unknown Statement\n"); break;
+            }
             break;
         case AST_LOOP:
             printf(" - Loop - \n");
-            visualize_ast(*ast.loop->condition);
-            visualize_ast(*ast.loop->body);
+            for (int i = 0; i < indent; i++) {
+                printf("  ");
+            }
+            switch (ast.loop->tag) {
+                case AST_WHILE: printf("While Loop\n"); break;
+                case AST_FOR: printf("For Loop\n"); break;
+                default: printf("Unknown Loop\n"); break;
+            }
+            if (ast.loop->condition != NULL) {
+                visualize_ast(*ast.loop->condition);
+            } else {
+                for (int i = 0; i < indent; i++) {
+                    printf("  ");
+                }
+                printf("NULL condition\n");
+            }
+            if (ast.loop->body != NULL) {
+                visualize_ast(*ast.loop->body);
+            } else {
+                for (int i = 0; i < indent; i++) {
+                    printf("  ");
+                }
+                printf("NULL body\n");
+            }
             break;
         case AST_CONDITION:
             printf(" - Condition - \n");
-            printf("Tag : %d\n", ast.condition->tag);
-            printf("Condition : \n");
-            visualize_ast(*ast.condition->condition);
-            visualize_ast(*ast.condition->body);
+            for (int i = 0; i < indent; i++) {
+                printf("  ");
+            }
+            switch (ast.condition->tag) {
+                case AST_IF: printf("If Condition\n"); break;
+                case AST_ELIF: printf("Else If Condition\n"); break;
+                case AST_ELSE: printf("Else Condition\n"); break;
+                default: printf("Unknown Condition\n"); break;
+            }
+            if (ast.condition->condition != NULL) {
+                visualize_ast(*ast.condition->condition);
+            } else {
+                for (int i = 0; i < indent; i++) {
+                    printf("  ");
+                }
+                printf("NULL condition\n");
+            }
+            if (ast.condition->body != NULL) {
+                visualize_ast(*ast.condition->body);
+            } else {
+                for (int i = 0; i < indent; i++) {
+                    printf("  ");
+                }
+                printf("NULL body\n");
+            }
             break;
         case AST_OP:
             printf(" - Operation -\n");
-            printf("Operator : %d\n", ast.op->tag);
-            printf("Left operand : \n");
-            visualize_ast(*ast.op->left);
-            printf("Right operand : \n");
-            visualize_ast(*ast.op->right);
+            for (int i = 0; i < indent; i++) {
+                printf("  ");
+            }
+            switch (ast.op->tag) {
+                case AST_ADD: printf("Addition\n"); break;
+                case AST_SUB: printf("Subtraction\n"); break;
+                case AST_MUL: printf("Multiplication\n"); break;
+                case AST_DIV: printf("Division\n"); break;
+                case AST_MOD: printf("Modulo\n"); break;
+                case AST_CMP: printf("Comparison\n"); break;
+                case AST_CHLT: printf("Less Than\n"); break;
+                case AST_CHGT: printf("Greater Than\n"); break;
+                case AST_CHLTE: printf("Less Than or Equal\n"); break;
+                case AST_CHGTE: printf("Greater Than or Equal\n"); break;
+                case AST_AND: printf("Logical AND\n"); break;
+                case AST_OR: printf("Logical OR\n"); break;
+                case AST_NOT: printf("Logical NOT\n"); break;
+                case AST_XOR: printf("Logical XOR\n"); break;
+                case AST_SHL: printf("Shift Left\n"); break;
+                case AST_SHR: printf("Shift Right\n"); break;
+                case AST_ASSIGN: printf("Assignment\n"); break;
+                default: printf("Unknown Operation\n"); break;
+            }
+            if (ast.op->left != NULL) {
+                visualize_ast(*ast.op->left);
+            } else {
+                for (int i = 0; i < indent; i++) {
+                    printf("  ");
+                }
+                printf("NULL left operand\n");
+            }
+            if (ast.op->right != NULL) {
+                visualize_ast(*ast.op->right);
+            } else {
+                for (int i = 0; i < indent; i++) {
+                    printf("  ");
+                }
+                printf("NULL right operand\n");
+            }
             break;
         case AST_VALUE:
             printf(" - Value -\n");
-            printf("Type : %d\n", ast.value->tag);
-            printf("Value : %d\n", ast.value->v);
+            for (int i = 0; i < indent; i++) {
+                printf("  ");
+            }
+            switch (ast.value->tag) {
+                case AST_LIT: printf("Literal Value: %d\n", ast.value->v); break;
+                case AST_VAR: printf("Variable Value: %d\n", ast.value->v); break;
+                default: printf("Unknown Value\n"); break;
+            }
+            break;
+        case AST_SPEC:
+            printf(" - Spec -\n");
+            for (int i = 0; i < indent; i++) {
+                printf("  ");
+            }
+            switch (ast.spec->tag) {
+                case AST_8: printf("8-bit Spec\n"); break;
+                case AST_16: printf("16-bit Spec\n"); break;
+                case AST_32: printf("32-bit Spec\n"); break;
+                default: printf("Unknown Spec\n"); break;
+            }
             break;
         default:
             printf("Unknown AST type\n");
             break;
     }
+
+    indent--;
 }

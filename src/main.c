@@ -13,6 +13,8 @@ int main(int argc,char** argv)
 { 
 
     DEBUG = 4;
+    //DEBUG_FILE = "parse.c";
+    //DEBUG_FN = "parse_call";
 
     //check if there is a file to compile
     if(argc < 2)

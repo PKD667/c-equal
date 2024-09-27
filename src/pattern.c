@@ -35,11 +35,12 @@
 
 
 
-// 
+//
 #define M_BLOCK -1
 #define OP_BLOCK -2
 #define VALUE -3
-#define OP -4
+#define OP -4 // regular 2-val OPS
+#define OP_NOT -41 // special for parsing single value OPS (NOT)
 #define VAR_DEC -5
 #define FUNC_DEC -6
 #define FUNC_CALL -7
@@ -50,49 +51,51 @@
 #define CONTINUE -12
 #define RETURN -13
 
+#define MAX_DEPTH 10
+
 
 
 pattern patterns[] = {
     // Actual patterns
     // Multilign block
-    { (int[]){T_LBRACE, WILDCARD, T_RBRACE, STOP}, M_BLOCK, parse_block},
+    { (int[]){T_LBRACE, STOP}, M_BLOCK, parse_block},
     // Operation block
-    {(int[]) {T_LPAREN,VALUE, T_RPAREN, STOP}, OP_BLOCK, parse_opblock},
-    // Operation
-    {(int[]) {OPTIONAL,VALUE,
+    {(int[]) {T_LPAREN, STOP}, OP_BLOCK, parse_opblock},
+    // Two operation value
+    {(int[]) {VALUE,
                             // arithmetic operators
                             T_PLUS,OR,T_MINUS,OR,T_STAR,OR,T_SLASH,OR,T_PERCENT,OR,
                             // comparison operators
-                            T_EQ,OR,T_GT,OR,T_GTE,OR,
-                            // logical operators
+                            T_EQ,OR,T_GT,OR,T_GTE,OR,T_LTE,OR,T_LT,OR,                            // logical operators
                             T_AND,OR,T_OR,OR,T_NOT,OR,
                             // bitwise operators
                             T_LSHIFT,OR,T_RSHIFT,OR,
-                            // assignment operators
+                            // assignment operatorsast.op->tag
                             T_ASSIGN,
-                            VALUE,
                         STOP}, OP, parse_op},
+    // not operation (one variable)
+    {(int[]) {T_NOT,STOP},OP_NOT,parse_op},
     // variable declaration
-    {(int[]) {TYPE,VAR,OPTIONAL,T_ASSIGN,OPTIONAL, VALUE, T_SEMICOLON,STOP}, VAR_DEC, parse_declare},
+    {(int[]) {TYPE,VAR,T_ASSIGN,OR,T_SEMICOLON,STOP}, VAR_DEC, parse_variable_declare},
     // function declaration
-    {(int[]) {TYPE,VAR,T_LPAREN,WILDCARD,T_RPAREN,M_BLOCK,STOP}, FUNC_DEC, parse_declare},
+    {(int[]) {TYPE,VAR,T_LPAREN,STOP}, FUNC_DEC, parse_function_declare},
     // function call
-    {(int[]) {VAR,T_LPAREN,WILDCARD,T_RPAREN,T_SEMICOLON,STOP}, FUNC_CALL, parse_call},
+    {(int[]) {VAR,T_LPAREN,STOP}, FUNC_CALL, parse_call},
     // conditions statement
-    {(int[]) {T_IF,OR,T_ELSE,OR,T_ELIF,OP_BLOCK,M_BLOCK,STOP}, CONDITION, parse_condition},
+    {(int[]) {T_IF,OR,T_ELSE,OR,T_ELIF,STOP}, CONDITION, parse_condition},
     // while loop
     {(int[]) {T_WHILE,OP_BLOCK,M_BLOCK,STOP}, W_LOOP, parse_loop},
     // for loop
-    {(int[]) {T_FOR,T_LPAREN,VALUE,T_SEMICOLON,VALUE,T_SEMICOLON,VALUE,T_RPAREN,M_BLOCK,STOP}, F_LOOP, parse_loop},
+    {(int[]) {T_FOR,STOP}, F_LOOP, parse_loop},
     // return statement
-    {(int[]) {T_RETURN,OPTIONAL,VALUE,T_SEMICOLON,STOP}, RETURN, parse_stmt},
+    {(int[]) {T_RETURN,STOP}, RETURN, parse_stmt},
     // break statement
-    {(int[]) {T_BREAK,T_SEMICOLON,STOP}, BREAK, parse_stmt},
+    {(int[]) {T_BREAK,STOP}, BREAK, parse_stmt},
     // continue statement
-    {(int[]) {T_CONTINUE,T_SEMICOLON,STOP}, CONTINUE, parse_stmt},
+    {(int[]) {T_CONTINUE,STOP}, CONTINUE, parse_stmt},
 
     // Utils for internal use (NULL func)
-    {(int[]) {T_NUMBER,OR,VAR,OR,OP,OR,OP_BLOCK,STOP}, VALUE, NULL},
+    {(int[]) {VAR,OR,T_NUMBER,STOP}, VALUE, parse_value},
     { NULL, 0, NULL }
 };
 
@@ -144,9 +147,9 @@ int matches(int* tokens, int* pattern,int len) {
     static int depths = 0;
     printf("Going into %d\n",depths+1);
     depths++;
-    if (depths > 5) {
+    if (depths > MAX_DEPTH) {
         msg(ERROR,"Pattern too deep");
-        exit(1);
+        return -3;
     }
 
     printf("Matching pattern: ");
@@ -171,8 +174,6 @@ int matches(int* tokens, int* pattern,int len) {
         }
 
 
-        beefor:
-
         dbg(2,"PATTERN: %s",get_pattern_string(*pattern));
         dbg(2,"TOKEN  : %s",get_token_string(*tokens));
         dbg(2,"%d / %d",tokens - btok,len);
@@ -187,7 +188,11 @@ int matches(int* tokens, int* pattern,int len) {
                 pattern+=2;
             }
             printf("\n");
-            goto beefor;
+
+            if (*pattern == STOP) {
+                depths -= 1;
+                return 0;
+            }
         }
 
 
@@ -216,28 +221,16 @@ int matches(int* tokens, int* pattern,int len) {
                 ntok++;
             }
             tokens++;
-        } else if (*pattern == VAR) {
-            if (t_isvar(*tokens)) {
-                dbg(2,"%s IS VAR",get_token_string(*tokens));
-                pattern++;
-            }
+        } else if (*pattern == VAR && t_isvar(*tokens)) {
+            dbg(2,"%s IS VAR",get_token_string(*tokens));
+            pattern++;
             tokens++;
-        } else if (*pattern == TYPE) {
-            if (t_istype(*tokens)) {
-                dbg(2,"%s IS TYPE",get_token_string(*tokens));
-                pattern++;
-            } else {
-                printf("Failed to match %s\n",get_token_string(*tokens));
-                depths -= 1;
-                return -1;
-            }
+        } else if (*pattern == TYPE && t_istype(*tokens)) {
+            dbg(2,"%s IS TYPE",get_token_string(*tokens));
+            pattern++;
             tokens++;
-        } else if (*pattern < 0) {
-            printf("Recursing into pattern %s\n",get_pattern_string(*pattern));
-            if (matches(&(*tokens), get_pattern(*pattern).exp,len) != 0) {
-                depths -= 1;
-                return -1;
-            }
+        } else if ((*pattern < 0) && (matches(&(*tokens), get_pattern(*pattern).exp,len) == 0)) {
+            dbg(2,"Matched with recursive pattern");
             pattern++;
             tokens++;
         } else if (*tokens == *pattern) {
@@ -248,15 +241,15 @@ int matches(int* tokens, int* pattern,int len) {
             dbg(2,"Inside OR, skipping to next ORed value");
             pattern += 2;
         } else {
-            printf("Failed to match %s\n",get_token_string(*tokens));
+            printf("Failed to match %s at %d\n",get_token_string(*tokens),depths);
             depths -= 1;
             return -1;
         }
 
 
+
     }
 
-    dbg(2,"Found Something at %d",depths);
     depths -= 1;
     return 0;
 }

@@ -67,7 +67,7 @@ struct AST {
 
 struct ASTstmt {
     enum {
-        AST_DECLARE, AST_CALL, AST_RETURN, AST_BREAK, AST_CONTINUE,
+        AST_FDECLARE, AST_VDECLARE, AST_CALL, AST_RETURN, AST_BREAK, AST_CONTINUE,
     } tag;
 
     struct AST** args;
@@ -129,9 +129,13 @@ struct AST* parse_stmt(int* tokens, int* index);
 struct AST* parse_op(int* tokens, int* index);
 struct AST* parse_opblock(int* tokens, int* index);
 struct AST* parse_block(int* tokens, int* index);
-struct AST* parse_declare(int* tokens, int* index);
+// declare block
+struct AST* parse_function_declare(int* tokens, int* index);
+struct AST* parse_variable_declare(int* tokens, int* index);
+
 struct AST* parse_call(int* tokens, int* index);
 struct AST* parse_loop(int* tokens, int* index);
+struct AST* parse_value(int* tokens, int* index);
 struct AST* parse_condition(int* tokens, int* index);
 
 
