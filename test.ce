@@ -34,4 +34,3 @@ t32 main() {
     return 0;
 }
 
-main();

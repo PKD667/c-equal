@@ -21,12 +21,21 @@ struct AST* parse_arg(int t) {
         ast->value->tag = AST_VAR;
         ast->value->v = -t;
     }
-    else if (t == T_NUMBER || t == T_STRING) {
+    else if (t == T_LINT || t == T_LFLOAT || t == T_LSTRING) {
         // literal
-        dbg(3,"Parsing literal");
         ast->type = AST_VALUE;
         ast->value = malloc(sizeof(struct ASTvalue));
-        ast->value->tag = AST_LIT;
+        switch (t) {
+            case T_LINT:
+                ast->value->tag = AST_LINT;
+                break;
+            case T_LFLOAT:
+                ast->value->tag = AST_LFLOAT;
+                break;
+            case T_LSTRING:
+                ast->value->tag = AST_LSTRING;
+                break;
+        }
         ast->value->v = get_laddr();
         dbg(3,"Literal address: %d", ast->value->v);
     }
@@ -295,7 +304,21 @@ struct AST* parse_call(int* tokens, int* index) {
         args -> arg , args | arg
             - <arg> T_COMMA <args> | <arg>
     */
+    // AST representation
+    /*
+        ASTstmt {
+            .tag = AST_CALL
+            .args = [
+                ASTvalue id,
+                AST* arg_1,
+                ...
+                AST* arg_n
+            ]
+            .argc n;
+        }
+    */
     struct AST* ast = malloc(sizeof(struct AST));
+    ast->type = AST_STMT;
     ast->stmt = malloc(sizeof(struct ASTstmt));
     ast->stmt->tag = AST_CALL;
 
@@ -303,6 +326,8 @@ struct AST* parse_call(int* tokens, int* index) {
         msg(ERROR, "Expected variable in call\n");
         exit(1);
     }
+
+    int call_id = tokens[*index];
 
     (*index)++;
 
@@ -315,6 +340,12 @@ struct AST* parse_call(int* tokens, int* index) {
     ast->stmt->argc = 0;
     int capacity = 10;
     ast->stmt->args = malloc(capacity * sizeof(struct AST*));
+
+    // adding the identifier as the first argument
+    dbg(3,"Parsing arg %s",get_token_string(call_id));
+    ast->stmt->args[0] = parse_arg(call_id);
+    ast->stmt->argc = 1;
+
 
     int pi = *index; // parenthesis index
     if (skip_to(tokens, &pi, T_RPAREN,0) != 0) {
@@ -516,30 +547,29 @@ struct AST* parse_function_declare(int* tokens, int* index) {
     dbg(2, "Parsing declare from %d", tokens[*index]);
 
     struct AST* ast = malloc(sizeof(struct AST));
-    ast->stmt = malloc(sizeof(struct ASTstmt));
-    ast->stmt->tag = AST_FDECLARE;
+    ast->fn = malloc(sizeof(struct ASTstmt));
+    ast->type = AST_FN;
 
     if (!t_istype(tokens[*index])) {
         printf("Expected type in declare\n");
         exit(1);
     }
 
-    ast->stmt->tag = AST_FDECLARE;
     // first argument is the type
     int capacity = 2;
-    ast->stmt->argc = 0;
-    ast->stmt->args = malloc(capacity * sizeof(struct AST*));
-    ast->stmt->args[0] = parse_specifier(tokens[*index]);
+    ast->fn->argc = 0;
+    ast->fn->args = malloc(capacity * sizeof(struct AST*));
+    ast->fn->args[0] = parse_specifier(tokens[*index]);
     (*index)++;
-    ast->stmt->argc++;
+    ast->fn->argc++;
     // second argument is the variable
     if (!t_isvar(tokens[*index])) {
         printf("Expected variable in declare\n");
         exit(1);
     }
-    ast->stmt->args[1] = parse_arg(tokens[*index]);
+    ast->fn->args[1] = parse_arg(tokens[*index]);
     (*index)++;
-    ast->stmt->argc++;
+    ast->fn->argc++;
 
     // now add the arguments in the parenthtesis
 
@@ -551,9 +581,9 @@ struct AST* parse_function_declare(int* tokens, int* index) {
     (*index)++;
 
     while (tokens[*index] != T_RPAREN) {
-        if (ast->stmt->argc >= capacity) {
+        if (ast->fn->argc >= capacity) {
             capacity *= 2;
-            ast->stmt->args = realloc(ast->stmt->args, capacity * sizeof(struct AST*));
+            ast->fn->args = realloc(ast->fn->args, capacity * sizeof(struct AST*));
         }
         // first we should have a type indicator
         if (!t_istype(tokens[*index])) {
@@ -562,9 +592,9 @@ struct AST* parse_function_declare(int* tokens, int* index) {
         }
         (*index)++;
 
-        ast->stmt->args[ast->stmt->argc] = parse_arg(tokens[*index]);
+        ast->fn->args[ast->fn->argc] = parse_arg(tokens[*index]);
         (*index)++;
-        ast->stmt->argc++;
+        ast->fn->argc++;
 
 
         if (tokens[*index] == T_COMMA) {
@@ -574,6 +604,16 @@ struct AST* parse_function_declare(int* tokens, int* index) {
     }
 
     (*index)++;
+
+    struct AST* body = parse(tokens, index,0);
+
+    // check if block is returned
+    if (body->type != AST_BLOCK) {
+        printf("Expected block in function declaration\n");
+        exit(1);
+    }
+
+    ast->fn->body = body->block;
 
     return ast;
 
@@ -590,8 +630,8 @@ struct AST* parse_variable_declare(int* tokens, int* index) {
     }
 
     struct AST* ast = malloc(sizeof(struct AST));
+    ast->type = AST_STMT;
     ast->stmt = malloc(sizeof(struct ASTvalue));
-    ast->stmt->tag = AST_VAR;
 
     if (!t_istype(tokens[*index])) {
         printf("Expected type in declare\n");
@@ -782,7 +822,7 @@ struct AST* parse(int* tokens, int* index,int len) {
 }
 
 
-struct ASTblock* parsefile(int* tokens, char** litterals) {
+struct ASTblock* parsefile(int* tokens) {
 
     dbg(2, "Parsing file");
 
@@ -808,7 +848,7 @@ struct ASTblock* parsefile(int* tokens, char** litterals) {
 }
 
 
-void visualize_ast(struct AST ast) {
+void visualize_ast(struct AST ast, byte** litterals, char** ids) {
     static int indent = 0;
     indent++;
 
@@ -822,6 +862,19 @@ void visualize_ast(struct AST ast) {
         printf("  ");
     }
     switch (ast.type) {
+        case AST_FN: 
+            printf(" - Function -\n"); 
+            visualize_ast(*ast.fn->args[0], litterals, ids);
+            visualize_ast(*ast.fn->args[1], litterals, ids);
+            for (int i = 2; i < ast.fn->argc;i++) {
+                visualize_ast(*ast.fn->args[i], litterals,ids);
+            }
+            // stuff specific to function. Might chnage later
+            struct AST body_wrp;
+            body_wrp.type = AST_BLOCK;
+            body_wrp.block = ast.fn->body;
+            visualize_ast(body_wrp, litterals, ids);
+            break;
         case AST_BLOCK:
             printf(" - Block - \n");
             for (int i = 0; i < ast.block->size; i++) {
@@ -830,7 +883,7 @@ void visualize_ast(struct AST ast) {
                 }
                 printf("Child %d\n", i);
                 if (ast.block->childs[i] != NULL) {
-                    visualize_ast(*ast.block->childs[i]);
+                    visualize_ast(*ast.block->childs[i], litterals, ids);
                 } else {
                     for (int j = 0; j < indent; j++) {
                         printf("  ");
@@ -845,21 +898,26 @@ void visualize_ast(struct AST ast) {
                 printf("  ");
             }
             switch (ast.stmt->tag) {
-                case AST_FDECLARE: printf("Function Declaration\n"); break;
                 case AST_VDECLARE: 
                     printf("Variable Declaration\n"); 
-                    visualize_ast(*ast.stmt->args[0]);
-                    visualize_ast(*ast.stmt->args[1]);
+                    visualize_ast(*ast.stmt->args[0], litterals, ids);
+                    visualize_ast(*ast.stmt->args[1], litterals, ids);
                     if (ast.stmt->argc > 2) {
-                        visualize_ast(*ast.stmt->args[2]);
+                        visualize_ast(*ast.stmt->args[2], litterals, ids);
                     }
                     break;
-                case AST_CALL: printf("Function Call\n"); break;
+                case AST_CALL: 
+                    printf("Function Call\n");
+                    visualize_ast(*ast.stmt->args[0],litterals,ids);
+                    for (int i = 1; i < ast.stmt->argc;i++) {
+                        visualize_ast(*ast.stmt->args[i], litterals,ids);
+                    }
+                    break;
                 case AST_RETURN:
                     printf("Return Statement\n");
                     if (ast.stmt->argc > 0) {
                         for (int i = 0; i < ast.stmt->argc; i++){
-                            visualize_ast(*ast.stmt->args[i]);
+                            visualize_ast(*ast.stmt->args[i], litterals, ids);
                         }
                     } else {
                         for (int i = 0; i < indent; i++) {
@@ -884,7 +942,7 @@ void visualize_ast(struct AST ast) {
                 default: printf("Unknown Loop\n"); break;
             }
             if (ast.loop->condition != NULL) {
-                visualize_ast(*ast.loop->condition);
+                visualize_ast(*ast.loop->condition, litterals, ids);
             } else {
                 for (int i = 0; i < indent; i++) {
                     printf("  ");
@@ -892,7 +950,7 @@ void visualize_ast(struct AST ast) {
                 printf("NULL condition\n");
             }
             if (ast.loop->body != NULL) {
-                visualize_ast(*ast.loop->body);
+                visualize_ast(*ast.loop->body, litterals, ids);
             } else {
                 for (int i = 0; i < indent; i++) {
                     printf("  ");
@@ -912,7 +970,7 @@ void visualize_ast(struct AST ast) {
                 default: printf("Unknown Condition\n"); break;
             }
             if (ast.condition->condition != NULL) {
-                visualize_ast(*ast.condition->condition);
+                visualize_ast(*ast.condition->condition, litterals, ids);
             } else {
                 for (int i = 0; i < indent; i++) {
                     printf("  ");
@@ -920,7 +978,7 @@ void visualize_ast(struct AST ast) {
                 printf("NULL condition\n");
             }
             if (ast.condition->body != NULL) {
-                visualize_ast(*ast.condition->body);
+                visualize_ast(*ast.condition->body, litterals, ids);
             } else {
                 for (int i = 0; i < indent; i++) {
                     printf("  ");
@@ -954,7 +1012,7 @@ void visualize_ast(struct AST ast) {
                 default: printf("Unknown Operation\n"); break;
             }
             if (ast.op->left != NULL) {
-                visualize_ast(*ast.op->left);
+                visualize_ast(*ast.op->left, litterals, ids);
             } else {
                 for (int i = 0; i < indent; i++) {
                     printf("  ");
@@ -962,7 +1020,7 @@ void visualize_ast(struct AST ast) {
                 printf("NULL left operand\n");
             }
             if (ast.op->right != NULL) {
-                visualize_ast(*ast.op->right);
+                visualize_ast(*ast.op->right, litterals, ids);
             } else {
                 for (int i = 0; i < indent; i++) {
                     printf("  ");
@@ -976,8 +1034,30 @@ void visualize_ast(struct AST ast) {
                 printf("  ");
             }
             switch (ast.value->tag) {
-                case AST_LIT: printf("Literal Value: %d\n", ast.value->v); break;
-                case AST_VAR: printf("Variable Value: %d\n", ast.value->v); break;
+                case (AST_LINT || AST_LFLOAT || AST_LSTRING) : 
+                    printf("Litteral id: %d\n", ast.value->v); 
+                    for (int i = 0; i < indent; i++) {
+                        printf("  ");
+                    }
+                    switch (ast.value->tag) {
+                        case AST_LINT: printf("Litteral Type: Integer\n"); break;
+                        case AST_LFLOAT: printf("Litteral Type: Float\n"); break;
+                        case AST_LSTRING: printf("Litteral Type: String\n"); break;
+                        default: printf("Unknown Litteral Type\n"); break;
+                    }
+                    for (int i = 0; i < indent; i++) {
+                        printf("  ");
+                    }
+                    printf("Litteral Value: %s\n", litterals[ast.value->v]);
+                    break;
+                case AST_VAR: 
+                    printf("Variable id: %d\n", ast.value->v); 
+                    for (int i = 0; i < indent; i++) {
+                        printf("  ");
+                    }
+                    printf("Variable Name: %s\n",ids[ast.value->v - 1]);
+                    break;
+
                 default: printf("Unknown Value\n"); break;
             }
             break;
@@ -992,6 +1072,10 @@ void visualize_ast(struct AST ast) {
                 case AST_32: printf("32-bit Spec\n"); break;
                 default: printf("Unknown Spec\n"); break;
             }
+            break;
+        case AST_NULL:
+            printf(" - NULL -\n");
+            msg(WARNING,"Someone forgot to add the type to the AST creator.");
             break;
         default:
             printf("Unknown AST type\n");

@@ -48,11 +48,12 @@ int main(int argc,char** argv)
 
     fclose(file);
 
-    char** litterals = calloc(MAX_LITTERALS, sizeof(char*));
+    byte** litterals;
+    char** ids;
     int* tokens = calloc(MAX_TOKENS, sizeof(int));
 
 
-    int ret = tokenize(buffer,(int**)&tokens, (char***)&litterals);
+    int ret = tokenize(buffer,(int**)&tokens, &litterals,&ids);
     if (ret == -1) {
         printf("Tokenization failed\n");
         return 1;
@@ -65,25 +66,29 @@ int main(int argc,char** argv)
     }
     printf("\nEncoding litterals: %d\n", l_count);
     char* encoded_literals;
-    int* addresses = encode_literals(litterals,&encoded_literals);
 
-    if (!addresses) {
-        printf("Encoding literals failed\n");
-        return 1;
+    printf("Litterals:\n");
+    for (int i = 0; litterals[i]; i++) {
+        printf("'");
+        for (int j = 0; litterals[i][j]; j++) {
+            printf("%c",litterals[i][j]);
+        }
+        printf("'\n");
     }
 
-    printf("Encoded literals: %s\n", encoded_literals);
-
-    for (int i = 0; i < l_count; i++) {
-        printf("Address: %d\n", addresses[i]);
+    printf("\n");
+    printf("Identifiers: \n");
+    for (int i = 0; ids[i]; i++) {
+        printf("%s\n", ids[i]);
     }
+
 
     // print the tokens
     for (int i = 0; tokens[i] != T_EOF; i++) {
         printf("%s ", get_token_string(tokens[i]));
     }
 
-    struct ASTblock* tree = parsefile(tokens, &encoded_literals);
+    struct ASTblock* tree = parsefile(tokens);
     if (!tree) {
         printf("Parsing failed\n");
         return 1;
@@ -94,9 +99,9 @@ int main(int argc,char** argv)
     struct AST* t = malloc(sizeof(struct AST));
     t->type = AST_BLOCK;
     t->block = tree;
-    visualize_ast(*t);
+    visualize_ast(*t, litterals, ids);
 
-
+    struct ASM_FIlE* assembly = assemblify(tree, litterals, ids);
 
 
     return 0;

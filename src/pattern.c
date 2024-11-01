@@ -95,7 +95,7 @@ pattern patterns[] = {
     {(int[]) {T_CONTINUE,STOP}, CONTINUE, parse_stmt},
 
     // Utils for internal use (NULL func)
-    {(int[]) {VAR,OR,T_NUMBER,STOP}, VALUE, parse_value},
+    {(int[]) {VAR,OR,T_LINT,OR,T_LFLOAT,OR,T_LSTRING,STOP}, VALUE, parse_value},
     { NULL, 0, NULL }
 };
 

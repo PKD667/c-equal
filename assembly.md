@@ -33,10 +33,31 @@
 
 ### Call structure
  - `call` - Call a function
+ - `ret` - Return from a function
+
+### NOP
+ - `nop` - No operation
 
 ### Base registers
  - `bsp` - Base Stack pointer
  - `csp` - Current Stack pointer
  - `ip` - Instruction pointer
  - `bp` - Base pointer
+
+
+
+## Meta
+
+### Basic Info
+
+ - `.file` - file name (debugging purpose)
+ - `
+
+### Structure
+
+ - `*:` Memory adress (`function:`)
+
+### Data
+
+ - `.data <size (int)> <raw-data>`
 

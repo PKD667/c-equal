@@ -1,3 +1,4 @@
+#pragma once
 #include "hashtable.h"
 
 enum t_token {
@@ -20,7 +21,7 @@ enum t_token {
     // statements
     T_RETURN, T_BREAK, T_CONTINUE,
     // literals
-    T_NUMBER, T_STRING,
+    T_LINT,T_LFLOAT, T_LSTRING,
     // type identifiers
     T_T32, T_T16, T_T8,
     // end of file
@@ -39,10 +40,15 @@ enum t_token {
 #define MAX_LITTERALS 512
 #define MAX_LITTERALS_LENGTH 512
 
-int tokenize(char* str,int** tokens,char*** litterals);
+// we'll use bytes when it's random stuff (mix of ints and strings)
+#define byte unsigned char
+
+int tokenize(char* str,int** tokens,byte*** litterals,char*** ids);
 
 
 enum ASTType {
+    AST_NULL,
+    AST_FN,
     AST_STMT,
     AST_OP,
     AST_CONDITION,
@@ -62,16 +68,24 @@ struct AST {
         struct ASTvalue* value;
         struct ASTloop* loop;
         struct ASTspec* spec;
+        struct ASTfn* fn;
     };
 };
 
 struct ASTstmt {
     enum {
-        AST_FDECLARE, AST_VDECLARE, AST_CALL, AST_RETURN, AST_BREAK, AST_CONTINUE,
+        AST_VDECLARE, AST_CALL, AST_RETURN, AST_BREAK, AST_CONTINUE,
     } tag;
 
     struct AST** args;
     int argc;
+};
+
+struct ASTfn {
+    char* name;
+    struct AST** args;
+    int argc;
+    struct ASTblock* body;
 };
 
 struct ASTop {
@@ -111,7 +125,8 @@ struct ASTblock {
 
 struct ASTvalue {
     enum {
-        AST_LIT, AST_VAR,
+        AST_LFLOAT, AST_LINT, AST_LSTRING,
+        AST_VAR,
     } tag;
     int v;
 };
@@ -123,7 +138,7 @@ struct ASTspec {
 };
 
 // Main parser functions
-struct ASTblock* parsefile(int* tokens, char** litterals);
+struct ASTblock* parsefile(int* tokens);
 struct AST* parse(int* tokens, int* index,int len);
 struct AST* parse_stmt(int* tokens, int* index);
 struct AST* parse_op(int* tokens, int* index);
@@ -176,4 +191,4 @@ pattern* match_pattern(int* tokens,int len);
 char* get_token_string(int token);
 char* get_pattern_string(int pattern_value);
 void visualize_pattern(int* pattern);
-void visualize_ast(struct AST ast);
+void visualize_ast(struct AST ast,byte** litterals,char** ids);

@@ -61,18 +61,78 @@ pair keywords[] = {
 
     // other
     {"(error)",T_ERROR},
-    {"(number)",T_NUMBER},
-    {"(string)",T_STRING},
+    {"(integer)",T_LINT},
+    {"(float)",T_LFLOAT},
+    {"(string)",T_LSTRING},
     {"(unknown)",T_UNKNOWN},
         {"EOF",T_EOF}
 };
 
+// check is a string is a numeric value (int or float)
+int numval(char* cs) {
 
-int tokenize(char* str,int** tokens,char*** litterals) {
+    if (cs == NULL || *cs == '\0') { 
+        return 0;
+    }
 
-    char ids[MAX_IDENTIFIERS][MAX_IDENTIFIERS_LENGTH];
+    int fp = 0;
+
+    char* c = cs;
+
+    while (*c != '\0') {
+        if (!isdigit(*c)) {
+            if (*c == '.') {
+                fp++;
+            } else {
+                return 0; // `char* cs` is not a number
+            }
+        }
+        c++;
+    }
+
+    if (fp > 0) {
+        if (fp > 1) {
+            return 0; // two dots, not a float
+        }
+         return 2; // FLOAT
+    } 
+
+    return 1; // INT
+
+}
+// `char escaped` is the char after the '\'
+char unscape(char escaped) {
+    switch (escaped) {
+        case 'n':
+            return '\n';
+        case '\\':
+            return '\\';
+        case '0':
+            return '\0';
+        default:
+            return escaped;
+    }
+}
+
+// in our litteral storage we will assume everything is a default c INT to be cautious.
+// bigger values will get destroyed
+// not memeory efficient but who cares about int sizes in executables ? 
+// nowadays even string storage doesnt matter that much compared to images and stuff
+
+int tokenize(char* str,int** tokens,byte*** litterals,char*** ids) {
+
+    (*ids) = calloc(MAX_IDENTIFIERS, sizeof(char*));
+    if (!(*ids)) {
+        fprintf(stderr, "Memory allocation failed\n");
+        return -1;
+    }
     int num_ids = 0;
 
+    (*litterals) = calloc(MAX_LITTERALS, sizeof(char*));
+    if (!(*litterals)) {
+        fprintf(stderr, "Memory allocation failed\n");
+        return -1;
+    }
     int litteral_count = 0;
 
     if (!tokens) {
@@ -122,9 +182,17 @@ int tokenize(char* str,int** tokens,char*** litterals) {
             printf("String token found\n");
             cur++;
             char token_buffer[BUFFER_SIZE] = {0};
-            token_buffer[0] = '"';
-            int buffer_index = 1;
+            int buffer_index = 0;
             while (*cur != '"' && *cur != '\0' && buffer_index < BUFFER_SIZE - 1) {
+
+                // escaped characters
+                if (*cur == '\\') {
+                    token_buffer[buffer_index++] = unscape(*(cur+1));
+                    cur += 2;
+                    continue;
+                }
+
+                // normal behavior
                 token_buffer[buffer_index++] = *cur++;
             }
             token_buffer[buffer_index] = '\0';
@@ -135,10 +203,15 @@ int tokenize(char* str,int** tokens,char*** litterals) {
                 return -1;
             }
             cur++;
-            printf("String token: %s\n", token_buffer);  // Print the collected token
-            (*tokens)[token_index++] = T_STRING;
-            (*litterals)[litteral_count] = malloc(strlen(token_buffer) + 1);
-            strcpy((*litterals)[litteral_count], token_buffer);
+            printf("String token: '%s'\n", token_buffer);  // Print the collected token
+            (*tokens)[token_index++] = T_LSTRING;
+            (*litterals)[litteral_count] = calloc(strlen(token_buffer) + 1,sizeof(char));
+            if ((*litterals)[litteral_count] == NULL) {
+                fprintf(stderr, "Memory allocation failed\n");
+                exit(1);
+            }
+            // using memcpy because litterals is byte, but basically strcpy
+            memcpy((*litterals)[litteral_count], token_buffer, strlen(token_buffer) + 1);
             litteral_count++;
             continue;
         }
@@ -170,13 +243,15 @@ int tokenize(char* str,int** tokens,char*** litterals) {
                 // check if the identifier is already in the list
                 int pos= -1;
                 for (int i = 0; i < num_ids; i++) {
-                    if (strcmp(ids[i], token_buffer) == 0) {
+                    if (strcmp((*ids)[i], token_buffer) == 0) {
                         pos = i;
                         break;
                     }
                 }
                 if (pos == -1) {
-                    strcpy(ids[num_ids], token_buffer);
+                    // add the identifier to the list
+                    (*ids)[num_ids] = calloc(strlen(token_buffer) + 1, sizeof(char));
+                    strcpy((*ids)[num_ids], token_buffer);
                     (*tokens)[token_index++] = -(num_ids+1);
                     num_ids++;
                     printf("Identifier: %s -> %d\n", token_buffer,num_ids-1);  // Print the collected token
@@ -190,17 +265,44 @@ int tokenize(char* str,int** tokens,char*** litterals) {
         // Collect numeric tokens
         else if (isdigit(*cur)) {
             printf("Numeric token found\n");
-            while (isdigit(*cur) && buffer_index < BUFFER_SIZE - 1) {
-                token_buffer[buffer_index++] = *cur++;
+            token_buffer[buffer_index++] = *cur;
+            cur++;
+            while (numval(token_buffer) && buffer_index < BUFFER_SIZE - 1) {
+                printf("Numeric token: %s\n", token_buffer);  // Print the collected token
+                token_buffer[buffer_index++] = *cur;
+                cur++;
             }
-            token_buffer[buffer_index] = '\0';
-
+            token_buffer[buffer_index-1] = '\0';
+            cur--;
+            
             printf("Numeric token: %s\n", token_buffer);  // Print the collected token
-            // add the litteral to the litterals list
-            (*litterals)[litteral_count] = malloc(strlen(token_buffer) + 1);
-            strcpy((*litterals)[litteral_count], token_buffer);
-            litteral_count++;
-            (*tokens)[token_index++] = T_NUMBER;
+
+            int litt_nval = numval(token_buffer);
+
+
+            if (litt_nval == 0) {
+                fprintf(stderr, "Invalid numeric token\n");
+                return -1;
+            } else if (litt_nval == 1) {
+                printf("Got INT\n");
+                // parse the number as an integer 
+                // store into the litterals list
+                int i = atoi(token_buffer);
+                printf("int('%s') == %d\n",token_buffer,i);
+                (*litterals)[litteral_count] = calloc(1,sizeof(int));
+                memcpy((*litterals)[litteral_count++], &i, sizeof(int));
+                (*tokens)[token_index++] = T_LINT;
+            } else if (litt_nval == 2) {
+                printf("Got FLOAT\n");
+                // parse the number as a float
+                // store into the num array
+                float f = atof(token_buffer);
+                (*litterals)[litteral_count] = calloc(1,sizeof(float));
+                memcpy((*litterals)[litteral_count++], &f, sizeof(float));
+                (*tokens)[token_index++] = T_LFLOAT;
+            }
+
+            printf("Done processing number\n");
         }
         // Process symbol tokens, including potential compound symbols like "=="
         else {

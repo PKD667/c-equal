@@ -38,7 +38,7 @@ int t_istype(int token) {
 
 // check if a token is a literal
 int t_islit(int token) {
-    return token == T_NUMBER || token == T_STRING;
+    return token == T_LINT || token == T_LFLOAT || token == T_LSTRING;
 }
 
 int t_isvar(int token) {
