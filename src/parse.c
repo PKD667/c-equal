@@ -18,7 +18,7 @@ struct AST* parse_arg(int t) {
         // variable
         ast->type = AST_VALUE;
         ast->value = malloc(sizeof(struct ASTvalue));
-        ast->value->tag = AST_VAR;
+        ast->value->tag = AST_ID; // Identifier
         ast->value->v = -t;
     }
     else if (t == T_LINT || t == T_LFLOAT || t == T_LSTRING) {
@@ -629,31 +629,26 @@ struct AST* parse_variable_declare(int* tokens, int* index) {
         nset = 1;
     }
 
-    struct AST* ast = malloc(sizeof(struct AST));
-    ast->type = AST_STMT;
-    ast->stmt = malloc(sizeof(struct ASTvalue));
+    struct AST* ast = calloc(1,sizeof(struct AST));
+    ast->type = AST_VAR;
+    ast->var = malloc(sizeof(struct ASTvalue));
 
     if (!t_istype(tokens[*index])) {
         printf("Expected type in declare\n");
         exit(1);
     }
 
-    ast->stmt->tag = AST_VDECLARE;
-    // first argument is the type
-    int capacity = 2;
-    ast->stmt->argc = 0;
-    ast->stmt->args = malloc(capacity * sizeof(struct AST*));
-    ast->stmt->args[0] = parse_specifier(tokens[*index]);
+
+    ast->var->spec = parse_specifier(tokens[*index]);
     (*index)++;
-    ast->stmt->argc++;
     // second argument is the variable
     if (!t_isvar(tokens[*index])) {
         printf("Expected variable in declare\n");
         exit(1);
     }
-    ast->stmt->args[1] = parse_arg(tokens[*index]);
+    struct AST* v_val = parse_arg(tokens[*index]);
+    ast->var->id = v_val;
     (*index)++;
-    ast->stmt->argc++;
 
     // get distance to semicolon
     // get semicolon index
@@ -675,8 +670,7 @@ struct AST* parse_variable_declare(int* tokens, int* index) {
             // assigned init value
             (*index)--;
 
-            ast->stmt->args[2] = parse(tokens, index,0);
-            ast->stmt->argc++;
+            ast->var->init = parse(tokens, index,0);
         } 
         if (tokens[*index] != T_SEMICOLON && nset) {
             printf("Expected ';' in declare\n");
@@ -875,6 +869,15 @@ void visualize_ast(struct AST ast, byte** litterals, char** ids) {
             body_wrp.block = ast.fn->body;
             visualize_ast(body_wrp, litterals, ids);
             break;
+        case AST_VAR:
+
+            printf(" - Variable Declaration - \n"); 
+            visualize_ast(*ast.var->spec, litterals, ids);
+            visualize_ast(*ast.var->id, litterals, ids);
+            if (ast.var->init != NULL) {
+                visualize_ast(*ast.var->init, litterals, ids);
+            }
+            break;
         case AST_BLOCK:
             printf(" - Block - \n");
             for (int i = 0; i < ast.block->size; i++) {
@@ -898,14 +901,6 @@ void visualize_ast(struct AST ast, byte** litterals, char** ids) {
                 printf("  ");
             }
             switch (ast.stmt->tag) {
-                case AST_VDECLARE: 
-                    printf("Variable Declaration\n"); 
-                    visualize_ast(*ast.stmt->args[0], litterals, ids);
-                    visualize_ast(*ast.stmt->args[1], litterals, ids);
-                    if (ast.stmt->argc > 2) {
-                        visualize_ast(*ast.stmt->args[2], litterals, ids);
-                    }
-                    break;
                 case AST_CALL: 
                     printf("Function Call\n");
                     visualize_ast(*ast.stmt->args[0],litterals,ids);
@@ -1050,7 +1045,7 @@ void visualize_ast(struct AST ast, byte** litterals, char** ids) {
                     }
                     printf("Litteral Value: %s\n", litterals[ast.value->v]);
                     break;
-                case AST_VAR: 
+                case AST_ID: 
                     printf("Variable id: %d\n", ast.value->v); 
                     for (int i = 0; i < indent; i++) {
                         printf("  ");

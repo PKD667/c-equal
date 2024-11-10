@@ -51,11 +51,11 @@
 ### Basic Info
 
  - `.file` - file name (debugging purpose)
- - `
+ - `.name` - function name 
 
 ### Structure
 
- - `*:` Memory adress (`function:`)
+ - `<id>:` Memory adress (`<id>` is a label)
 
 ### Data
 

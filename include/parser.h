@@ -47,15 +47,16 @@ int tokenize(char* str,int** tokens,byte*** litterals,char*** ids);
 
 
 enum ASTType {
-    AST_NULL,
-    AST_FN,
-    AST_STMT,
-    AST_OP,
-    AST_CONDITION,
-    AST_LOOP,
-    AST_BLOCK,
-    AST_VALUE,
-    AST_SPEC,
+    AST_NULL, // so that AST_FN != 0
+    AST_FN, // Function declare
+    AST_VAR, // Variable declare
+    AST_STMT, // Statements (not really you'll see)
+    AST_OP, // Operation 
+    AST_CONDITION, // Condition (Control Flow)
+    AST_LOOP, // Loop (Control Flow)
+    AST_BLOCK, // Block (bunch of AST branches)
+    AST_VALUE,  // A value (litteral or var)
+    AST_SPEC, // Type specification (size) [Might extend]
 };
 
 struct AST {
@@ -69,23 +70,40 @@ struct AST {
         struct ASTloop* loop;
         struct ASTspec* spec;
         struct ASTfn* fn;
+        struct ASTvar* var;
     };
 };
 
+// statements
+// actually not really statements in the C sense
+// but I'm to lazy to change
 struct ASTstmt {
     enum {
-        AST_VDECLARE, AST_CALL, AST_RETURN, AST_BREAK, AST_CONTINUE,
+        AST_CALL, AST_RETURN, AST_BREAK, AST_CONTINUE,
     } tag;
 
     struct AST** args;
     int argc;
 };
 
+// function declaration
 struct ASTfn {
     char* name;
     struct AST** args;
     int argc;
     struct ASTblock* body;
+};
+
+// variable declaration
+struct ASTvar {
+    // type
+    struct AST* spec; // should be AST Spec
+    struct AST* init; // Can be anything that returns a value I guess
+
+    // Id we'll find in ASTvalues
+    struct AST* id;
+    
+
 };
 
 struct ASTop {
@@ -126,7 +144,7 @@ struct ASTblock {
 struct ASTvalue {
     enum {
         AST_LFLOAT, AST_LINT, AST_LSTRING,
-        AST_VAR,
+        AST_ID,
     } tag;
     int v;
 };

@@ -44,9 +44,8 @@ enum ins {
 <name>:
     .data <size> <data>
 */
-struct VAR {
+struct ASM_VAR {
     char* name;
-    int id; // id used in the parsing process (order of declaration)
     unsigned int size;
     byte* data;
 };
@@ -79,15 +78,33 @@ struct ASM_OP {
 // This represents a section of executable data in the asm file
 // Here is how it translates
 /*
-<name>:
+<code-id>:
     op_1 arg_1_1 arg_1_2
     op_2 arg_2_1 arg_2_2
         ...
     op_n arg_n_1 arg_n_2
 */
-struct ASM_FN {
+struct ASM_CODE {
 
     struct ASM_OP* ops;
+};
+
+
+// This represents a function in the asm file
+// Here is how it translates
+/*
+.name <name>
+code_1:
+    [...]
+
+code_2:
+    [...]
+
+
+*/
+struct ASM_FN {
+
+    struct ASM_CODE* code;
 
     char* name;
 };
@@ -112,9 +129,10 @@ var_n_name:
 
 // function part
 
-fn_1_name:
+.name fn_1_name
     [...]
-fn_2_name:
+
+.name fn_2_name
     [...]
 
     ...
@@ -128,9 +146,9 @@ struct ASM_FILE {
 
     char* filename;
 
-    struct VAR* vars;
+    struct ASM_VAR* vars;
 
-    struct ASM_FN* functions;
+    struct ASM_FN* fonctions;
 };
 
 
